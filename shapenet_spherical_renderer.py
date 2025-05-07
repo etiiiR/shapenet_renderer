@@ -58,33 +58,45 @@ for split_name, files in splits.items():
         mesh_name = os.path.splitext(os.path.basename(mesh_fpath))[0]
         instance_dir = os.path.join(split_output, mesh_name)
 
-        # Compute bounding radius
+        # Import mesh and normalize to fit inside unit sphere
         renderer.import_mesh(mesh_fpath, scale=1., object_world_matrix=None)
         obj = bpy.context.selected_objects[0]
+
+        # Normalize mesh to unit scale
         bbox_corners = [obj.matrix_world * Vector(corner) for corner in obj.bound_box]
         center = sum(bbox_corners, Vector((0.0, 0.0, 0.0))) / 8.0
         radius = max((v - center).length for v in bbox_corners)
-        sphere_radius = radius * 2.0
+        obj.scale = (1.0 / radius, 1.0 / radius, 1.0 / radius)  # uniform scale        
+        bpy.context.scene.update()
+
+
+        # Recompute center after scaling
+        bbox_corners = [obj.matrix_world * Vector(corner) for corner in obj.bound_box]
+        center = sum(bbox_corners, Vector((0.0, 0.0, 0.0))) / 8.0
+        obj_location = -np.array(center).reshape(1, 3)
+        sphere_radius = 2.0  # fixed virtual sphere size
+
         bpy.ops.object.select_all(action='DESELECT')
         obj.select = True
         bpy.ops.object.delete()
 
-        # Use different view counts based on split
+        # Generate camera views
         if split_name == 'train':
             cam_locations = util.sample_spherical(opt.num_observations, sphere_radius)
         else:
             cam_locations = util.get_archimedean_spiral(sphere_radius, 250)
 
-        obj_location = np.zeros((1, 3))
-        cv_poses = util.look_at(cam_locations, obj_location)
+        cv_poses = util.look_at(cam_locations, np.zeros((1, 3)))
         blender_poses = [util.cv_cam2world_to_bcam2world(m) for m in cv_poses]
 
-        # Identity object pose
+        # Object pose
         rot_mat = np.eye(3)
         hom_coords = np.array([[0., 0., 0., 1.]])
         obj_pose = np.concatenate((rot_mat, obj_location.reshape(3, 1)), axis=-1)
         obj_pose = np.concatenate((obj_pose, hom_coords), axis=0)
 
-        # Final import + render
-        renderer.import_mesh(mesh_fpath, scale=1., object_world_matrix=obj_pose)
-        renderer.render(instance_dir, blender_poses, write_cam_params=True)
+        # Import again with normalization applied
+        renderer.import_mesh(mesh_fpath, scale=1.0 / radius, object_world_matrix=obj_pose)
+
+        # Render (will skip views that result in empty or invalid output)
+        renderer.render(instance_dir, blender_poses, write_cam_params=True, object_radius=sphere_radius)
