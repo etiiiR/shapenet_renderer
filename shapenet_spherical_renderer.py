@@ -3,7 +3,8 @@ import numpy as np
 import os
 import sys
 sys.path.append(os.path.dirname(__file__))
-
+import bpy
+from mathutils import Vector
 import util
 import blender_interface
 
@@ -23,7 +24,23 @@ instance_name = opt.mesh_fpath.split('/')[-3]
 instance_dir = os.path.join(opt.output_dir, instance_name)
 
 renderer = blender_interface.BlenderInterface(resolution=128)
+renderer.import_mesh(opt.mesh_fpath, scale=1., object_world_matrix=None)
 
+# Get the imported object
+imported_obj = bpy.context.selected_objects[0]
+
+# Compute the world-space bounding box corners
+bbox_corners = [imported_obj.matrix_world * Vector(corner) for corner in imported_obj.bound_box]
+center = sum(bbox_corners, Vector((0.0, 0.0, 0.0))) / 8.0
+radius = max((v - center).length for v in bbox_corners)
+
+# Set optimal radius to 1.5x object radius
+opt.sphere_radius = radius * 1.5
+
+# Remove the object before re-importing with correct pose
+bpy.ops.object.select_all(action='DESELECT')
+imported_obj.select = True
+bpy.ops.object.delete()
 if opt.mode == 'train':
     cam_locations = util.sample_spherical(opt.num_observations, opt.sphere_radius)
 elif opt.mode == 'test':
