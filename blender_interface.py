@@ -119,12 +119,25 @@ class BlenderInterface():
                 intrinsics_file.write('%d %d\n' % (self.resolution, self.resolution))
 
             # Compute near/far from camera distances
+            #cam_locs = [mat.to_translation() for mat in blender_cam2world_matrices]
+            #dists = [(loc - Vector((0.0, 0.0, 0.0))).length for loc in cam_locs]
+            #near = max(0.01, min(dists) - object_radius)
+            #far  = max(dists) + object_radius
+            #with open(os.path.join(output_dir, 'near_far.txt'), 'w') as nf_file:
+            #    nf_file.write('%.6f %.6f\n' % (near, far))
+                
+            # Compute per-view near/far from camera distance to origin
             cam_locs = [mat.to_translation() for mat in blender_cam2world_matrices]
-            dists = [(loc - Vector((0.0, 0.0, 0.0))).length for loc in cam_locs]
-            near = max(0.01, min(dists) - object_radius)
-            far  = max(dists) + object_radius
+            near_far_lines = []
+            for loc in cam_locs:
+                dist = (loc - Vector((0.0, 0.0, 0.0))).length
+                # Use actual object radius with safe padding
+                near = max(0.1, dist - object_radius)
+                far = dist + object_radius
+                near_far_lines.append("{:.6f} {:.6f}".format(near, far))
+
             with open(os.path.join(output_dir, 'near_far.txt'), 'w') as nf_file:
-                nf_file.write('%.6f %.6f\n' % (near, far))
+                nf_file.write("\n".join(near_far_lines))
 
         for i, mat in enumerate(blender_cam2world_matrices):
             self.camera.matrix_world = mat
