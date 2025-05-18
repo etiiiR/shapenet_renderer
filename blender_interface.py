@@ -60,6 +60,8 @@ class BlenderInterface():
         ext = os.path.splitext(fpath)[-1]
         if ext == '.obj':
             bpy.ops.import_scene.obj(filepath=str(fpath), split_mode='OFF')
+        if ext == '.stl':
+            bpy.ops.import_mesh.stl(filepath=str(fpath))
         elif ext == '.ply':
             bpy.ops.import_mesh.ply(filepath=str(fpath))
 

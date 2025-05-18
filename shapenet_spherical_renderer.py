@@ -35,8 +35,8 @@ mesh_files = sorted([
 
 # Index-based split (PixelNeRF-style)
 n = len(mesh_files)
-n_train = int(0.8 * n)
-n_val = int(0.1 * n)
+n_train = int(0 * n)
+n_val = int(0.5 * n)
 splits = {
     "train": mesh_files[:n_train],
     "val":   mesh_files[n_train:n_train + n_val],
