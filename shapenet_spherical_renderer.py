@@ -1,5 +1,6 @@
 import argparse
 import numpy as np
+import json
 import os
 import sys
 sys.path.append(os.path.dirname(__file__))
@@ -12,8 +13,8 @@ import blender_interface
 p = argparse.ArgumentParser(description='Render meshes into PixelNeRF-style train/val/test splits.')
 p.add_argument('--mesh_dir', type=str, required=True, help='Directory of .obj or .stl meshes.')
 p.add_argument('--output_dir', type=str, required=True, help='Base output directory.')
-p.add_argument('--num_observations', type=int, default=50, help='Number of views per object for training.')
-p.add_argument('--resolution', type=int, default=128, help='Image resolution.')
+p.add_argument('--num_observations', type=int, default=128, help='Number of views per object for training.')
+p.add_argument('--resolution', type=int, default=512, help='Image resolution.')
 argv = sys.argv[sys.argv.index("--") + 1:]
 opt = p.parse_args(argv)
 
@@ -100,3 +101,15 @@ for split_name, files in splits.items():
 
         # Render (will skip views that result in empty or invalid output)
         renderer.render(instance_dir, blender_poses, write_cam_params=True, object_radius=sphere_radius)
+
+split_summary = {
+    split: [os.path.splitext(os.path.basename(f))[0] for f in files]
+    for split, files in splits.items()
+}
+
+# Save to JSON file
+split_json_path = os.path.join(opt.output_dir, "split_summary.json")
+with open(split_json_path, "w") as f:
+    json.dump(split_summary, f, indent=4)
+
+print("Saved split information to: {split_json_path}".format(split_json_path=split_json_path))
