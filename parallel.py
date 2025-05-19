@@ -10,7 +10,7 @@ output_dir = r"C:\Users\super\Documents\GitHub\shapenet_renderer\parallel_output
 num_observations = "128"
 resolution = "256"
 split_name = "train"
-num_processes = 32  # Number of parallel Blender instances
+num_processes =12
 
 def render_single_mesh(mesh_path):
     mesh_name = os.path.splitext(os.path.basename(mesh_path))[0]
