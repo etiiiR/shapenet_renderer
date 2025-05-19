@@ -11,10 +11,11 @@ import blender_interface
 
 # CLI args
 p = argparse.ArgumentParser(description='Render meshes into PixelNeRF-style train/val/test splits.')
-p.add_argument('--mesh_dir', type=str, required=True, help='Directory of .obj or .stl meshes.')
+p.add_argument('--mesh_dir', type=str, required=False, help='Directory of .obj or .stl meshes.')
 p.add_argument('--output_dir', type=str, required=True, help='Base output directory.')
 p.add_argument('--num_observations', type=int, default=128, help='Number of views per object for training.')
-p.add_argument('--resolution', type=int, default=512, help='Image resolution.')
+p.add_argument('--resolution', type=int, default=256, help='Image resolution.')
+p.add_argument('--mesh_fpath', type=str, help='Path to a single mesh file to process')
 argv = sys.argv[sys.argv.index("--") + 1:]
 opt = p.parse_args(argv)
 
@@ -35,8 +36,8 @@ mesh_files = sorted([
 
 # Index-based split (PixelNeRF-style)
 n = len(mesh_files)
-n_train = int(0 * n)
-n_val = int(0.5 * n)
+n_train = int(0.8 * n)
+n_val = int(0.1 * n)
 splits = {
     "train": mesh_files[:n_train],
     "val":   mesh_files[n_train:n_train + n_val],

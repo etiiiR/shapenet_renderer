@@ -10,3 +10,14 @@ To render a batch of ply files in parallel, use the "find" command in conjunctio
 
 
 & "C:\Program Files\Blender2.7\blender.exe" --background --python .\shapenet_spherical_renderer.py --addons "io_mesh_stl" -- --mesh_dir C:/Users/super/Documents/Github/sequoia/data/processed/meshes_obj/ --mode train --output_dir C:/Users/super/Documents/GitHub/shapenet_renderer/data/sequoia/data --num_observations 128
+
+
+tomorrow:
+
+ & "C:\Program Files\Blender2.7\blender.exe" --background --python .\shapenet_spherical_renderer.py --addons "io_mesh_stl" -- --mesh_dir C:/Users/super/Documents/Github/sequoia/data/augmented_pollen/full_combo --output_dir C:/Users/super/Documents/GitHub/shapenet_renderer/data/augumented/bilder --num_observations 128
+
+datasets:
+1.0 train,
+
+
+oder 0.5 val

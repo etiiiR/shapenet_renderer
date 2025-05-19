@@ -5,7 +5,7 @@ from mathutils import Vector
 
 
 class BlenderInterface():
-    def __init__(self, resolution=512, background_color=(1,1,1)):
+    def __init__(self, resolution=256, background_color=(1,1,1)):
         self.resolution = resolution
 
         # Delete the default cube
