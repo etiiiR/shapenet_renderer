@@ -27,7 +27,7 @@ def render_single_mesh(mesh_path):
         "--object_name", mesh_name,
         "--num_observations", num_observations,
         "--resolution", resolution,
-        "--orthogonal",
+        #"--orthogonal",
     ]
 
     print(f"[INFO] Launching Blender for: {mesh_name}")
