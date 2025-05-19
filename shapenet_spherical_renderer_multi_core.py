@@ -25,7 +25,6 @@ argv = sys.argv[sys.argv.index("--") + 1:]
 opt = p.parse_args(argv)
 
 if opt.mesh_fpath and opt.split_name and opt.object_name:
-    # === Parallel Single-Mesh Rendering Mode ===
     renderer = blender_interface.BlenderInterface(resolution=opt.resolution)
     instance_dir = os.path.join(opt.output_dir, "pollen_{}".format(opt.split_name), opt.object_name)
     os.makedirs(instance_dir, exist_ok=True)
@@ -48,12 +47,12 @@ if opt.mesh_fpath and opt.split_name and opt.object_name:
     obj.select = True
     bpy.ops.object.delete()
 
-    if opt.split_name == 'train' and opt.orthogonal is False:
-        cam_locations = util.sample_spherical(opt.num_observations, sphere_radius)
-    if (opt.orthogonal is False):
-        cam_locations = util.get_archimedean_spiral(sphere_radius, 250)
     if opt.orthogonal:
         cam_locations = util.get_orthogonal_camera_positions(sphere_radius, center=(0, 0, 0))
+    elif opt.split_name == 'train':
+        cam_locations = util.sample_spherical(opt.num_observations, sphere_radius)
+    else:
+        cam_locations = util.get_archimedean_spiral(sphere_radius, 250)
 
     cv_poses = util.look_at(cam_locations, np.zeros((1, 3)))
     blender_poses = [util.cv_cam2world_to_bcam2world(m) for m in cv_poses]
