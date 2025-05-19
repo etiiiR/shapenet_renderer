@@ -222,3 +222,17 @@ def get_archimedean_spiral(sphere_radius, num_steps=250):
         i += a / (2 * num_steps)
 
     return np.array(translations)
+
+def get_orthogonal_camera_positions(sphere_radius, center=(0, 0, 0)):
+    """
+    Returns 4 camera positions at 90-degree intervals around the Y axis,
+    all at the same elevation (XZ plane), looking at the center.
+    """
+    positions = []
+    for i in range(4):
+        angle = i * (math.pi / 2)  # 0, 90, 180, 270 degrees in radians
+        x = sphere_radius * math.cos(angle) + center[0]
+        y = center[1]
+        z = sphere_radius * math.sin(angle) + center[2]
+        positions.append((x, y, z))
+    return np.array(positions)
