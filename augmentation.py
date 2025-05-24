@@ -14,7 +14,7 @@ class FastPollenAugmentor:
     """
     PROGRESS_FILE = 'progress.json'
 
-    def __init__(self, mesh_dir, output_dir, num_augmentations=3, decimate_ratio=0.2, seed=42):
+    def __init__(self, mesh_dir, output_dir, num_augmentations=2, decimate_ratio=1.0, seed=42):
         self.mesh_dir = mesh_dir
         self.output_dir = output_dir
         self.num_augmentations = num_augmentations
@@ -28,9 +28,7 @@ class FastPollenAugmentor:
             'asymmetry': self._asymmetry,
             'full_combo': self._full_combo,
             'radical_reshape': self._radical_reshape,
-            'lobed': self._lobed,
             'irregular': self._irregular,
-            'ellipsoid': self._ellipsoid,
         }
         self._prepare_workspace()
         self.progress = self._load_progress()
@@ -69,14 +67,15 @@ class FastPollenAugmentor:
         self.clear_scene()
         bpy.ops.import_mesh.stl(filepath=filepath)
         obj = bpy.context.selected_objects[0]
-        bbox = [obj.matrix_world * Vector(c) for c in obj.bound_box]
+        bbox = [obj.matrix_world * Vector(c) for c in obj.bound_box]  # <-- fix here
         center = sum(bbox, Vector((0,0,0))) / 8.0
         r = max((v-center).length for v in bbox)
         if r > 0:
             obj.scale = (1.0/r, 1.0/r, 1.0/r)
-        mod = obj.modifiers.new('Decimate', type='DECIMATE')
-        mod.ratio = self.decimate_ratio
-        bpy.ops.object.modifier_apply(modifier=mod.name)
+        if self.decimate_ratio < 1.0:
+            mod = obj.modifiers.new('Decimate', type='DECIMATE')
+            mod.ratio = self.decimate_ratio
+            bpy.ops.object.modifier_apply(modifier=mod.name)
         return obj
 
     def bake_and_export(self, obj, out_path):
@@ -170,45 +169,104 @@ class FastPollenAugmentor:
         mod_disp.texture = tex
         mod_disp.strength = 0.06 + t * 0.14  # doubled strength
             
-    def _ellipsoid(self, obj, t):
-        scale_x = 1.0 + t * random.uniform(0.2, 0.5)
-        scale_y = 1.0 - t * random.uniform(0.1, 0.3)
-        scale_z = 1.0 + t * random.uniform(0.1, 0.3)
-        obj.scale = (scale_x, scale_y, scale_z)
+    
         
     def _lobed(self, obj, t):
         mod = obj.modifiers.new('LobedSimple', type='SIMPLE_DEFORM')
         mod.deform_method = 'BEND'
-        mod.angle = random.uniform(-0.5, 0.5) * (1 + t)
+        # Reduce angle and scaling for subtler lobes
+        mod.angle = random.uniform(-0.18, 0.18) * (0.5 + 0.5 * t)
         # Optionally, add a lattice modifier for more complex lobes
         
+
+    def _mild_lattice(self, obj, t):
+        lat_data = bpy.data.lattices.new('RandLat')
+        lat_data.points_u = lat_data.points_v = lat_data.points_w = 4
+        lat = bpy.data.objects.new('RandLatObj', lat_data)
+        bpy.context.scene.objects.link(lat)
+        lat.location = obj.location
+        lat.scale = obj.dimensions
+        mod_lat = obj.modifiers.new('RandLattice', type='LATTICE')
+        mod_lat.object = lat
+        bpy.context.scene.objects.active = lat
+        bpy.ops.object.mode_set(mode='EDIT')
+        # Slightly reduced amplitude for safety
+        base_amp = 0.0007 + t * 0.002
+        for p in lat.data.points:
+            dist = sum(abs(x - 0.5) for x in p.co_deform) / 1.5
+            amp = base_amp * (0.7 + 0.5 * dist)
+            p.co_deform = (
+                p.co_deform[0] + random.uniform(-amp, amp),
+                p.co_deform[1] + random.uniform(-amp, amp),
+                p.co_deform[2] + random.uniform(-amp, amp)
+            )
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.context.scene.objects.active = obj
+    
+    def _mild_simple_deform(self, obj, name, method, strength):
+        mod = obj.modifiers.new(name, type='SIMPLE_DEFORM')
+        mod.deform_method = method
+        if method in ['TWIST', 'BEND']:
+            mod.angle = random.uniform(-strength, strength)
+        else:
+            mod.factor = random.uniform(-strength, strength)
+    
+    def _mild_cast(self, obj, t):
+        mod = obj.modifiers.new('RandCast', type='CAST')
+        mod.cast_type = random.choice(['SPHERE', 'CYLINDER'])
+        mod.factor = 0.2 + t * random.uniform(0.03, 0.08)
+        mod.use_x = mod.use_y = mod.use_z = True
+    
+    def _mild_displace(self, obj, t):
+        tex = bpy.data.textures.new('RandDisplaceTex', type='CLOUDS')
+        mod = obj.modifiers.new('RandDisplace', type='DISPLACE')
+        mod.texture = tex
+        mod.strength = 0.01 + t * 0.02
+    
     def _irregular(self, obj, t):
+        """
+        Applies a combination of mild, randomized deformations to create subtle irregularity,
+        while avoiding flattening or collapsing the mesh.
+        """
+        # Choose a random subset of deformations (2 or 3)
         deform_choices = [
-            lambda o: o.modifiers.new('RandTwist', type='SIMPLE_DEFORM').deform_method == 'TWIST',
-            lambda o: o.modifiers.new('RandBend', type='SIMPLE_DEFORM').deform_method == 'BEND',
-            lambda o: o.modifiers.new('RandTaper', type='SIMPLE_DEFORM').deform_method == 'TAPER',
-            lambda o: o.modifiers.new('RandStretch', type='SIMPLE_DEFORM').deform_method == 'STRETCH',
-            lambda o: o.modifiers.new('RandCast', type='CAST'),
-            lambda o: o.modifiers.new('RandDisplace', type='DISPLACE'),
-            lambda o: o.modifiers.new('RandLattice', type='LATTICE'),
-            lambda o: o.modifiers.new('RandWave', type='WAVE'),
-            lambda o: o.modifiers.new('RandSmooth', type='SMOOTH'),
+            lambda o: self._mild_simple_deform(o, 'RandTwist', 'TWIST', 0.10 + t * 0.15),
+            lambda o: self._mild_simple_deform(o, 'RandBend', 'BEND', 0.10 + t * 0.15),
+            # Clamp TAPER and STRETCH to positive values to avoid flattening
+            lambda o: self._mild_simple_deform(o, 'RandTaper', 'TAPER', 0.08 + t * 0.10, clamp_positive=True),
+            #lambda o: self._mild_simple_deform(o, 'RandStretch', 'STRETCH', 0.06 + t * 0.10, clamp_positive=True),
+            lambda o: self._mild_cast(o, t),
+            lambda o: self._mild_displace(o, t),
+            lambda o: self._mild_lattice(o, t),
         ]
-        for _ in range(random.randint(2, 4)):
-            deform = random.choice(deform_choices)
+        num_deforms = random.choice([2, 3])
+        for deform in random.sample(deform_choices, num_deforms):
             deform(obj)
+    
+    def _mild_simple_deform(self, obj, name, method, strength, clamp_positive=False):
+        mod = obj.modifiers.new(name, type='SIMPLE_DEFORM')
+        mod.deform_method = method
+        if method in ['TWIST', 'BEND']:
+            mod.angle = random.uniform(-strength, strength)
+        elif method in ['TAPER', 'STRETCH'] and clamp_positive:
+            # Only positive values to avoid flattening
+            mod.factor = random.uniform(0.0, strength)
+        else:
+            mod.factor = random.uniform(-strength, strength)
 
 
     def _radical_reshape(self, obj, t):
-        # Apply a strong bend for radical shape, but keep the surface smooth
+        # Apply a moderate bend for radical shape, but keep the surface smooth
         mod_bend = obj.modifiers.new('BigBend', type='SIMPLE_DEFORM')
         mod_bend.deform_method = 'BEND'
-        mod_bend.angle = random.uniform(-1.2, 1.2) * (0.7 + t)
+        # Slightly increased angle range and scaling
+        mod_bend.angle = random.uniform(-0.28, 0.28) * (0.22 + 0.28 * t)
         # Optionally, add a cast for more radical but smooth reshaping
         if random.random() < 0.5:
             mod_cast = obj.modifiers.new('RadicalCast', type='CAST')
             mod_cast.cast_type = random.choice(['SPHERE', 'CYLINDER'])
-            mod_cast.factor = 0.8 + t * random.uniform(0.1, 0.4)
+            # Slightly increased factor for a bit more effect
+            mod_cast.factor = 0.22 + t * random.uniform(0.03, 0.10)
             mod_cast.use_x = mod_cast.use_y = mod_cast.use_z = True
         # Optionally, add a lattice for organic but smooth deformation
         if random.random() < 0.5:
@@ -222,7 +280,8 @@ class FastPollenAugmentor:
             mod_lat.object = lat
             bpy.context.scene.objects.active = lat
             bpy.ops.object.mode_set(mode='EDIT')
-            base_amp = 0.01 + t * 0.03
+            # Slightly increased amplitude for a bit more visible deformation
+            base_amp = 0.0012 + t * 0.003
             for p in lat.data.points:
                 dist = sum(abs(x - 0.5) for x in p.co_deform) / 1.5
                 amp = base_amp * (0.7 + 0.5 * dist)
@@ -236,19 +295,20 @@ class FastPollenAugmentor:
 
     def _full_combo(self, obj, t):
         print("[ℹ️] Running full_combo with multiple moderate deformations")
-        base_twist = 0.01 + t * 0.03
+        # Increase all deformation strengths by about 10%
+        base_twist = (0.01 + t * 0.03) * 1.1
         mod_twist = obj.modifiers.new('Twist', type='SIMPLE_DEFORM')
         mod_twist.deform_method = 'TWIST'
         mod_twist.angle = base_twist * random.uniform(0.8, 1.2)
-        base_bend = -0.01 - t * 0.03
+        base_bend = (-0.01 - t * 0.03) * 1.1
         mod_bend = obj.modifiers.new('Bend', type='SIMPLE_DEFORM')
         mod_bend.deform_method = 'BEND'
         mod_bend.angle = base_bend * random.uniform(0.8, 1.2)
-        base_taper = 0.003 + t * 0.012
+        base_taper = (0.003 + t * 0.012) * 1.1
         mod_taper = obj.modifiers.new('Taper', type='SIMPLE_DEFORM')
         mod_taper.deform_method = 'TAPER'
         mod_taper.factor = base_taper * random.uniform(0.8, 1.2)
-        base_stretch = 0.003 + t * 0.012
+        base_stretch = (0.003 + t * 0.012) * 1.1
         mod_stretch = obj.modifiers.new('Stretch', type='SIMPLE_DEFORM')
         mod_stretch.deform_method = 'STRETCH'
         mod_stretch.factor = base_stretch * random.uniform(0.8, 1.2)
@@ -262,7 +322,7 @@ class FastPollenAugmentor:
         mod_lat.object = lat
         bpy.context.scene.objects.active = lat
         bpy.ops.object.mode_set(mode='EDIT')
-        base_amp = 0.0015 + t * 0.004
+        base_amp = (0.0015 + t * 0.004) * 1.1
         amp_factor = random.uniform(0.8, 1.2)
         for p in lat.data.points:
             dist = sum(abs(x - 0.5) for x in p.co_deform) / 1.5
