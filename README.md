@@ -23,3 +23,5 @@ datasets:
 
 
 oder 0.5 val
+
+> python .\parallel_augmented.py
